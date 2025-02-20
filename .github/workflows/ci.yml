@@ -1,0 +1,57 @@
+name: CI Pipeline
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Run Go Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.23
+    
+    - name: Run tests
+      run: go test -v ./...
+
+  examples:
+    name: Run Examples
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      weaviate:
+        image: semitechnologies/weaviate:nightly
+        ports:
+          - 8080:8080
+        env:
+          QUERY_DEFAULTS_LIMIT: 25
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+          PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+          DEFAULT_VECTORIZER_MODULE: 'none'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.23
+    
+    - name: Build k6 with extension
+      run: |
+        go install go.k6.io/xk6/cmd/xk6@latest
+        xk6 build --with github.com/weaviate/xk6-weaviate@latest
+    
+    - name: Wait for Weaviate
+      run: sleep 10
+    
+    - name: Run batch operations example
+      run: ./k6 run examples/batch-operations.js 
+    
+    - name: Run tenant operations example
+      run: ./k6 run examples/tenant-operations.js
