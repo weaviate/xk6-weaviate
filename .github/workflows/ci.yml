@@ -6,6 +6,16 @@ jobs:
   test:
     name: Run Go Tests
     runs-on: ubuntu-latest
+    services:
+      weaviate:
+        image: semitechnologies/weaviate:nightly
+        ports:
+          - 8080:8080
+        env:
+          QUERY_DEFAULTS_LIMIT: 25
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+          PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+          DEFAULT_VECTORIZER_MODULE: 'none'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -15,6 +25,22 @@ jobs:
       with:
         go-version: 1.23
     
+    - name: Wait for Weaviate
+      run: |
+        echo "Wait for Weaviate to be ready"
+        timeout=120
+        counter=0
+        until curl -sf -o /dev/null "http://localhost:8080/v1/.well-known/ready"; do
+          counter=$((counter + 1))
+          if [ $counter -ge $timeout ]; then
+            echo "ERROR: Weaviate is not ready after ${timeout}s"
+            exit 1
+          fi
+          echo "Weaviate is not ready, trying again in 1s"
+          sleep 1
+        done
+        echo "Weaviate is ready"
+      
     - name: Run tests
       run: go test -v ./...
 
@@ -48,7 +74,20 @@ jobs:
         xk6 build --with github.com/weaviate/xk6-weaviate@latest
     
     - name: Wait for Weaviate
-      run: sleep 10
+      run: |
+        echo "Wait for Weaviate to be ready"
+        timeout=120
+        counter=0
+        until curl -sf -o /dev/null "http://localhost:8080/v1/.well-known/ready"; do
+          counter=$((counter + 1))
+          if [ $counter -ge $timeout ]; then
+            echo "ERROR: Weaviate is not ready after ${timeout}s"
+            exit 1
+          fi
+          echo "Weaviate is not ready, trying again in 1s"
+          sleep 1
+        done
+        echo "Weaviate is ready"
     
     - name: Run batch operations example
       run: ./k6 run examples/batch-operations.js 
