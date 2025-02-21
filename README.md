@@ -47,8 +47,9 @@ import weaviate from 'k6/x/weaviate';
 import { check } from 'k6';
 
 const client = weaviate.newClient({
-  host: 'localhost:8080',
-  scheme: 'http',
+  host: 'np27xpxes6ybjbshntocgq.c0.europe-west3.gcp.weaviate.cloud:443',
+  scheme: 'https',
+  grpcHost: 'grpc-np27xpxes6ybjbshntocgq.c0.europe-west3.gcp.weaviate.cloud:443',
 });
 
 export default () => {
@@ -96,7 +97,8 @@ import weaviate from 'k6/x/weaviate';
 
 const client = weaviate.newClient({
   host: 'localhost:8080',
-  scheme: 'http'
+  scheme: 'http',
+  grpcHost: 'localhost:50051',
 });
 
 export default () => {

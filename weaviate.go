@@ -11,6 +11,7 @@ import (
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/auth"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/data/replication"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/grpc"
 	"github.com/weaviate/weaviate/entities/models"
 	"go.k6.io/k6/js/modules"
 )
@@ -48,6 +49,14 @@ func init() {
 }
 
 // NewClient creates a new Weaviate client instance
+// cfg is a map of configuration options
+// scheme is the scheme to use for the client (http or https)
+// host is the host to use for the client (e.g. localhost:8080)
+// grpcHost is the host to use for the gRPC client (e.g. localhost:50051)
+// authToken is the authentication token to use for the client
+// apiKey is the API key to use for the client
+// headers is a map of additional headers to use for the client
+// timeout is the timeout to use for the client
 func (*Weaviate) NewClient(cfg map[string]interface{}) (*Client, error) {
 	// Default to http if scheme not provided
 	scheme := "http"
@@ -60,9 +69,17 @@ func (*Weaviate) NewClient(cfg map[string]interface{}) (*Client, error) {
 		return nil, fmt.Errorf("host is required in config")
 	}
 
+	grpcHost, ok := cfg["grpcHost"].(string)
+	if !ok {
+		return nil, fmt.Errorf("grpcHost is required in config")
+	}
+
 	config := weaviate.Config{
 		Host:   host,
 		Scheme: scheme,
+		GrpcConfig: &grpc.Config{
+			Host: grpcHost,
+		},
 	}
 
 	// Handle authentication if provided

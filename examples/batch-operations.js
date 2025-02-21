@@ -4,6 +4,7 @@ import { check } from 'k6';
 const client = weaviate.newClient({
   host: 'localhost:8080',
   scheme: 'http',
+  grpcHost: 'localhost:50051',
 });
 
 export default () => {
