@@ -1,6 +1,6 @@
 name: CI Pipeline
 
-on: [pull_request]
+on: [push,pull_request]
 
 jobs:
   test:
@@ -26,6 +26,15 @@ jobs:
       with:
         go-version: 1.23
     
+    - name: Check formatting
+      run: |
+        make format
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Code is not properly formatted. Please run 'make format'"
+          git diff
+          exit 1
+        fi
+    
     - name: Wait for Weaviate
       run: |
         echo "Wait for Weaviate to be ready"
@@ -43,7 +52,7 @@ jobs:
         echo "Weaviate is ready"
       
     - name: Run tests
-      run: go test -v ./...
+      run: make test
 
   examples:
     name: Run Examples
@@ -71,25 +80,10 @@ jobs:
         go-version: 1.23
     
     - name: Build k6 with extension
-      run: |
-        go install go.k6.io/xk6/cmd/xk6@latest
-        xk6 build --with xk6-weaviate=.
+      run: make build
     
     - name: Wait for Weaviate
-      run: |
-        echo "Wait for Weaviate to be ready"
-        timeout=120
-        counter=0
-        until curl -sf -o /dev/null "http://localhost:8080/v1/.well-known/ready"; do
-          counter=$((counter + 1))
-          if [ $counter -ge $timeout ]; then
-            echo "ERROR: Weaviate is not ready after ${timeout}s"
-            exit 1
-          fi
-          echo "Weaviate is not ready, trying again in 1s"
-          sleep 1
-        done
-        echo "Weaviate is ready"
+      run: make wait-weaviate
     
     - name: Run batch operations example
       run: ./k6 run examples/batch-operations.js 
