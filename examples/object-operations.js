@@ -223,7 +223,7 @@ export default () => {
   } finally {
     // Cleanup
     try {
-      //client.deleteAllCollections();
+      client.deleteAllCollections();
     } catch (e) {
       console.error(`Cleanup failed: ${e.message}`);
     }

@@ -83,7 +83,20 @@ jobs:
       run: make build
     
     - name: Wait for Weaviate
-      run: make wait-weaviate
+      run: |
+        echo "Wait for Weaviate to be ready"
+        timeout=120
+        counter=0
+        until curl -sf -o /dev/null "http://localhost:8080/v1/.well-known/ready"; do
+          counter=$((counter + 1))
+          if [ $counter -ge $timeout ]; then
+            echo "ERROR: Weaviate is not ready after ${timeout}s"
+            exit 1
+          fi
+          echo "Weaviate is not ready, trying again in 1s"
+          sleep 1
+        done
+        echo "Weaviate is ready"
     
     - name: Run batch operations example
       run: ./k6 run examples/batch-operations.js 
