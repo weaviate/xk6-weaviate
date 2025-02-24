@@ -31,7 +31,7 @@ export default () => {
   client.updateTenant("MultiTenantCollection", [
     {
       name: "tenant1",
-      activityStatus: "COLD"
+      activityStatus: "INACTIVE"
     }
   ]);
 

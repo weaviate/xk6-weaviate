@@ -8,6 +8,7 @@ import (
 
 func TestTenantManagement(t *testing.T) {
 	client := createTestClient(t)
+	defer client.DeleteAllCollections()
 
 	// Create a collection for tenant testing
 	err := client.CreateCollection("MultiTenantCollection", map[string]interface{}{

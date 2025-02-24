@@ -142,7 +142,7 @@ export default () => {
 
 1. Ensure you have a Weaviate instance running locally:
    ```bash
-   docker run -d -p 8080:8080 semitechnologies/weaviate:latest
+   docker run -d -p 8080:8080 -p 50051:50051 semitechnologies/weaviate:latest
    ```
 
 2. Run the examples using the built k6 binary:

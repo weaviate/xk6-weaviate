@@ -90,3 +90,6 @@ jobs:
     
     - name: Run tenant operations example
       run: ./k6 run examples/tenant-operations.js
+
+    - name: Run object operations example
+      run: ./k6 run examples/object-operations.js

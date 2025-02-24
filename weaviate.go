@@ -3,6 +3,8 @@ package weaviate
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +39,44 @@ func GetStringSlice(val interface{}) []string {
 		return result
 	}
 	return nil
+}
+
+// Add helper function at top of file with other helpers
+func GetBoolValue(m map[string]interface{}, key string, defaultValue bool) bool {
+	if val, ok := m[key].(bool); ok {
+		return val
+	}
+	return defaultValue
+}
+
+// ToInt handles all numeric types from JS/Go conversions
+func ToInt(val interface{}) (int, bool) {
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		if parsed, err := strconv.Atoi(v); err == nil {
+			return parsed, true
+		}
+		return 0, false
+	default:
+		// Handle other numeric types that might come from JS
+		rv := reflect.ValueOf(val)
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return int(rv.Int()), true
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return int(rv.Uint()), true
+		case reflect.Float32, reflect.Float64:
+			return int(rv.Float()), true
+		default:
+			return 0, false
+		}
+	}
 }
 
 // Client represents a Weaviate client instance
@@ -133,6 +173,29 @@ func (c *Client) CreateCollection(collectionName string, collectionConfig map[st
 	if vectorIndexConfig, ok := collectionConfig["vectorIndexConfig"].(map[string]interface{}); ok {
 		collection.VectorIndexConfig = vectorIndexConfig
 	}
+	if vectorConfig, ok := collectionConfig["vectorConfig"].(map[string]interface{}); ok {
+		vectorConfigs := make(map[string]models.VectorConfig)
+		for name, config := range vectorConfig {
+			if configMap, ok := config.(map[string]interface{}); ok {
+				vc := models.VectorConfig{}
+
+				if vectorizer, ok := configMap["vectorizer"].(map[string]interface{}); ok {
+					vc.Vectorizer = vectorizer
+				}
+
+				if vectorIndexType, ok := configMap["vectorIndexType"].(string); ok {
+					vc.VectorIndexType = vectorIndexType
+				}
+
+				if vectorIndexConfig, ok := configMap["vectorIndexConfig"].(map[string]interface{}); ok {
+					vc.VectorIndexConfig = vectorIndexConfig
+				}
+
+				vectorConfigs[name] = vc
+			}
+		}
+		collection.VectorConfig = vectorConfigs
+	}
 
 	// Handle inverted index config
 	if invertedIndexConfig, ok := collectionConfig["invertedIndexConfig"].(map[string]interface{}); ok {
@@ -152,10 +215,34 @@ func (c *Client) CreateCollection(collectionName string, collectionConfig map[st
 		}
 	}
 
-	// Handle multi-tenancy config
+	// Updated multi-tenancy config
 	if multiTenancy, ok := collectionConfig["multiTenancy"].(map[string]interface{}); ok {
 		collection.MultiTenancyConfig = &models.MultiTenancyConfig{
-			Enabled: multiTenancy["enabled"].(bool),
+			Enabled:              GetBoolValue(multiTenancy, "enabled", false),
+			AutoTenantCreation:   GetBoolValue(multiTenancy, "autoTenantCreation", false),
+			AutoTenantActivation: GetBoolValue(multiTenancy, "autoTenantActivation", false),
+		}
+	}
+
+	// New replication config handling
+	if replicationConfig, ok := collectionConfig["replicationConfig"].(map[string]interface{}); ok {
+		// Handle factor type conversion safely
+		var factor int64
+		switch v := replicationConfig["factor"].(type) {
+		case int64:
+			factor = v
+		case float64:
+			factor = int64(v)
+		case int:
+			factor = int64(v)
+		default:
+			factor = 1 // Default value if type is unexpected
+		}
+
+		collection.ReplicationConfig = &models.ReplicationConfig{
+			Factor:           factor,
+			AsyncEnabled:     GetBoolValue(replicationConfig, "asyncEnabled", false),
+			DeletionStrategy: GetStringValue(replicationConfig, "deletionStrategy"),
 		}
 	}
 
@@ -185,6 +272,10 @@ func (c *Client) DeleteCollection(collectionName string) error {
 		ClassDeleter().
 		WithClassName(collectionName).
 		Do(context.Background())
+}
+
+func (c *Client) DeleteAllCollections() error {
+	return c.client.Schema().AllDeleter().Do(context.Background())
 }
 
 // CreateTenant creates one or more tenants for a collection
@@ -352,22 +443,22 @@ func (c *Client) BatchDelete(className string, options map[string]interface{}) (
 			where = where.WithValueText(valueText)
 		}
 
-		batchDeleter.WithWhere(where)
+		batchDeleter = batchDeleter.WithWhere(where)
 	}
 
 	// Handle dry run option
 	if dryRun, ok := options["dryRun"].(bool); ok {
-		batchDeleter.WithDryRun(dryRun)
+		batchDeleter = batchDeleter.WithDryRun(dryRun)
 	}
 
 	// Handle output format
 	if output, ok := options["output"].(string); ok {
-		batchDeleter.WithOutput(output)
+		batchDeleter = batchDeleter.WithOutput(output)
 	}
 
 	// Handle tenant
 	if tenant, ok := options["tenant"].(string); ok {
-		batchDeleter.WithTenant(tenant)
+		batchDeleter = batchDeleter.WithTenant(tenant)
 	}
 
 	replicationMap := map[string]string{
@@ -378,7 +469,7 @@ func (c *Client) BatchDelete(className string, options map[string]interface{}) (
 
 	// Handle consistency level
 	if consistencyLevel, ok := options["consistencyLevel"].(string); ok {
-		batchDeleter.WithConsistencyLevel(replicationMap[consistencyLevel])
+		batchDeleter = batchDeleter.WithConsistencyLevel(replicationMap[consistencyLevel])
 	}
 
 	response, err := batchDeleter.Do(context.Background())
@@ -408,4 +499,178 @@ func (c *Client) BatchDelete(className string, options map[string]interface{}) (
 	}
 
 	return output, nil
+}
+
+func (c *Client) ObjectInsert(className string, object map[string]interface{}) (map[string]interface{}, error) {
+	creator := c.client.Data().Creator().WithClassName(className)
+
+	// Optional ID
+	if id, ok := object["id"].(string); ok {
+		creator = creator.WithID(id)
+	}
+
+	// Properties handling
+	if props, ok := object["properties"].(map[string]interface{}); ok {
+		creator = creator.WithProperties(props)
+	}
+
+	// Vector handling (single vector)
+	if vector, ok := object["vector"].([]interface{}); ok {
+		float32Vec := make([]float32, len(vector))
+		for i, v := range vector {
+			if f, ok := v.(float64); ok {
+				float32Vec[i] = float32(f)
+			}
+		}
+		creator = creator.WithVector(float32Vec)
+	}
+
+	// Named vectors handling
+	if vectors, ok := object["vectors"].(map[string]interface{}); ok {
+		namedVectors := make(models.Vectors)
+		for name, vec := range vectors {
+			if vecSlice, ok := vec.([]interface{}); ok {
+				float32Vec := make([]float32, len(vecSlice))
+				for i, v := range vecSlice {
+					if f, ok := v.(float64); ok {
+						float32Vec[i] = float32(f)
+					}
+				}
+				namedVectors[name] = float32Vec
+			}
+		}
+		creator = creator.WithVectors(namedVectors)
+	}
+
+	// Tenant handling
+	if tenant, ok := object["tenant"].(string); ok {
+		creator = creator.WithTenant(tenant)
+	}
+
+	// Consistency level handling
+	replicationMap := map[string]string{
+		"all":    replication.ConsistencyLevel.ALL,
+		"one":    replication.ConsistencyLevel.ONE,
+		"quorum": replication.ConsistencyLevel.QUORUM,
+	}
+	// if consistencyLevel does not match, throw an error
+	if cl, ok := object["consistencyLevel"].(string); ok {
+		if _, ok := replicationMap[cl]; !ok {
+			return nil, fmt.Errorf("invalid consistency level: %s", cl)
+		}
+		creator = creator.WithConsistencyLevel(replicationMap[cl])
+	}
+
+	// Execute the insert
+	wrapper, err := creator.Do(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	// Build result map
+	result := map[string]interface{}{
+		"id":         wrapper.Object.ID.String(),
+		"properties": wrapper.Object.Properties,
+	}
+
+	// Include vector/vectors if present
+	if len(wrapper.Object.Vector) > 0 {
+		result["vector"] = wrapper.Object.Vector
+	}
+	if len(wrapper.Object.Vectors) > 0 {
+		result["vectors"] = wrapper.Object.Vectors
+	}
+
+	// Add tenant if specified
+	if wrapper.Object.Tenant != "" {
+		result["tenant"] = wrapper.Object.Tenant
+	}
+
+	return result, nil
+}
+
+func (c *Client) FetchObjects(className string, options map[string]interface{}) (map[string]interface{}, error) {
+	getter := c.client.Data().ObjectsGetter().WithClassName(className)
+
+	// Handle ID if provided
+	if id, ok := options["id"].(string); ok {
+		getter = getter.WithID(id)
+	}
+
+	// Universal number conversion for limit
+	if limitVal, exists := options["limit"]; exists {
+		if limit, ok := ToInt(limitVal); ok {
+			getter = getter.WithLimit(limit)
+		}
+	}
+
+	// Universal number conversion for offset
+	if offsetVal, exists := options["offset"]; exists {
+		if offset, ok := ToInt(offsetVal); ok {
+			getter = getter.WithOffset(offset)
+		}
+	}
+
+	// Handle cursor pagination
+	if after, ok := options["after"].(string); ok {
+		getter = getter.WithAfter(after)
+	}
+
+	// Handle consistency level
+	if cl, ok := options["consistencyLevel"].(string); ok {
+		getter = getter.WithConsistencyLevel(cl)
+	}
+
+	// Handle tenant
+	if tenant, ok := options["tenant"].(string); ok {
+		getter = getter.WithTenant(tenant)
+	}
+
+	// Handle node name
+	if nodeName, ok := options["nodeName"].(string); ok {
+		getter = getter.WithNodeName(nodeName)
+	}
+
+	// Handle additional properties
+	if additional, ok := options["additional"].([]string); ok {
+		for _, prop := range additional {
+			if prop == "vector" {
+				getter = getter.WithVector()
+			} else {
+				getter = getter.WithAdditional(prop)
+			}
+		}
+	}
+
+	// Execute the query
+	objects, err := getter.Do(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert results to simplified map for JS
+	result := make(map[string]interface{})
+	objectsList := make([]map[string]interface{}, len(objects))
+
+	for i, obj := range objects {
+		item := map[string]interface{}{
+			"id":         obj.ID.String(),
+			"properties": obj.Properties,
+		}
+
+		if len(obj.Vector) > 0 {
+			item["vector"] = obj.Vector
+		}
+		if len(obj.Vectors) > 0 {
+			item["vectors"] = obj.Vectors
+		}
+		if obj.Additional != nil {
+			item["additional"] = obj.Additional
+		}
+
+		objectsList[i] = item
+	}
+
+	result["objects"] = objectsList
+	return result, nil
 }

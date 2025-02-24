@@ -9,6 +9,7 @@ import (
 
 func TestBatchOperations(t *testing.T) {
 	client := createTestClient(t)
+	defer client.DeleteAllCollections()
 
 	t.Run("batch create and delete", func(t *testing.T) {
 		// Create test collection
