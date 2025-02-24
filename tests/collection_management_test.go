@@ -9,7 +9,7 @@ import (
 func TestCollectionManagement(t *testing.T) {
 	client := createTestClient(t)
 	defer client.DeleteAllCollections()
-	
+
 	t.Run("create and delete collection", func(t *testing.T) {
 		// Create a collection
 		err := client.CreateCollection("TestCollection", map[string]interface{}{
