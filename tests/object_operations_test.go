@@ -150,20 +150,22 @@ func TestObjectInsert(t *testing.T) {
 		assert.Len(t, objects, 1)
 
 		// Verify vectors content
-		vectors := objects[0]["vectors"].(models.Vectors)
+		vectors := objects[0]["vectors"].(map[string]interface{})
 		expectedVector1 := []float32{0.1, 0.2, 0.3}
 		expectedVector2 := []float32{0.4, 0.5, 0.6}
 
 		// Check vector lengths
-		assert.Equal(t, len(expectedVector1), len(vectors["vector1"]), "Vector1 length should match")
-		assert.Equal(t, len(expectedVector2), len(vectors["vector2"]), "Vector2 length should match")
+		vector1 := vectors["vector1"].(models.Vector)
+		vector2 := vectors["vector2"].(models.Vector)
+		assert.Equal(t, len(expectedVector1), len(vector1), "Vector1 length should match")
+		assert.Equal(t, len(expectedVector2), len(vector2), "Vector2 length should match")
 
 		// Check vector contents
 		for i := range expectedVector1 {
-			assert.Equal(t, expectedVector1[i], vectors["vector1"][i], "Vector1 element %d should match", i)
+			assert.Equal(t, expectedVector1[i], vector1[i], "Vector1 element %d should match", i)
 		}
 		for i := range expectedVector2 {
-			assert.Equal(t, expectedVector2[i], vectors["vector2"][i], "Vector2 element %d should match", i)
+			assert.Equal(t, expectedVector2[i], vector2[i], "Vector2 element %d should match", i)
 		}
 
 		err = client.DeleteCollection(className)
