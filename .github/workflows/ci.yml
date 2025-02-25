@@ -99,10 +99,10 @@ jobs:
         echo "Weaviate is ready"
     
     - name: Run batch operations example
-      run: ./k6 run examples/batch-operations.js 
+      run: ./k6 run --throw examples/batch-operations.js 
     
     - name: Run tenant operations example
-      run: ./k6 run examples/tenant-operations.js
+      run: ./k6 run --throw examples/tenant-operations.js
 
     - name: Run object operations example
-      run: ./k6 run examples/object-operations.js
+      run: ./k6 run --throw examples/object-operations.js

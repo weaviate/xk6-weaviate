@@ -21,6 +21,12 @@ build:
 	go install go.k6.io/xk6/cmd/xk6@latest
 	xk6 build --with $(shell go list -m)=.
 
+## build-debug: Builds a custom 'k6' with debug symbols for debugging.
+build-debug:
+	XK6_BUILD_FLAGS="-gcflags='all=-N -l'" \
+	xk6 build --with $(shell go list -m)=. --output k6-debug
+	@echo "Debug build completed: k6-debug"
+
 ## format: Applies Go formatting to code.
 format:
 	go fmt ./...

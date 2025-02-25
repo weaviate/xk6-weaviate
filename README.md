@@ -11,6 +11,8 @@ K6 extension to interact with Weaviate vector database.
 ### Object Operations
 - Batch create objects with properties and vectors
 - Batch delete objects based on where filters
+- Insert individual objects with properties and vectors
+- Fetch objects with various filtering options
 
 ### Multi-tenancy Operations
 - Create tenants for a collection
@@ -36,6 +38,59 @@ To build a custom `k6` binary with this extension, first ensure you have the pre
 
 This will create a k6 binary that includes the xk6-weaviate extension in your local folder.
 
+## Client Configuration
+
+The client can be configured in several ways:
+
+### Basic Configuration
+```javascript
+const client = weaviate.newClient({
+  host: 'localhost:8080',
+  scheme: 'http',
+  grpcHost: 'localhost:50051',
+});
+```
+
+### URL with Scheme
+You can include the scheme in the host URL, and it will be automatically extracted:
+```javascript
+const client = weaviate.newClient({
+  host: 'http://localhost:8080',
+  grpcHost: 'localhost:50051',
+});
+```
+
+### Weaviate Cloud Instances
+For Weaviate Cloud instances, the client will automatically configure the appropriate settings:
+```javascript
+const client = weaviate.newClient({
+  host: 'my-instance.c0.europe-west3.gcp.weaviate.cloud',
+  // grpcHost is optional for Weaviate Cloud instances
+});
+```
+
+The client will:
+1. Set the scheme to 'https'
+2. Add port 443 if not specified
+3. Automatically generate the grpcHost by prepending 'grpc-' to the host
+
+### Authentication
+```javascript
+// With API Key
+const client = weaviate.newClient({
+  host: 'localhost:8080',
+  grpcHost: 'localhost:50051',
+  apiKey: 'your-api-key',
+});
+
+// With Bearer Token
+const client = weaviate.newClient({
+  host: 'localhost:8080',
+  grpcHost: 'localhost:50051',
+  authToken: 'your-auth-token',
+});
+```
+
 ## Examples
 
 ### Prerequisites
@@ -47,9 +102,8 @@ import weaviate from 'k6/x/weaviate';
 import { check } from 'k6';
 
 const client = weaviate.newClient({
-  host: 'np27xpxes6ybjbshntocgq.c0.europe-west3.gcp.weaviate.cloud:443',
-  scheme: 'https',
-  grpcHost: 'grpc-np27xpxes6ybjbshntocgq.c0.europe-west3.gcp.weaviate.cloud:443',
+  host: 'np27xpxes6ybjbshntocgq.c0.europe-west3.gcp.weaviate.cloud',
+  // For Weaviate Cloud, grpcHost is optional
 });
 
 export default () => {
@@ -149,4 +203,6 @@ export default () => {
    ```bash
    ./k6 run examples/batch-operations.js
    ./k6 run examples/tenant-operations.js
+   ./k6 run examples/object-operations.js
+   ./k6 run examples/client-config.js
    ```

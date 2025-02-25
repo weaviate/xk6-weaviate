@@ -155,9 +155,8 @@ export default () => {
     check(vectorFetch, {
       'vector fetch includes vectors': (r) => {
         return r.objects && r.objects.length > 0 && 
-               r.objects[0]._additional &&
-               r.objects[0]._additional.vectors &&
-               Object.keys(r.objects[0]._additional.vectors).length === 2;
+               r.objects[0].vector && Array.isArray(r.objects[0].vector) &&
+               r.objects[0].vector.length === 3;
       }
     });
 
@@ -214,9 +213,12 @@ export default () => {
     check(namedVectorsFetch, {
       'named vectors fetch includes vectors': (r) => {
         return r.objects && r.objects.length > 0 && 
-               r.objects[0]._additional &&
-               r.objects[0]._additional.vectors &&
-               Object.keys(r.objects[0]._additional.vectors).length === 2;
+               r.objects[0].vectors &&
+               Object.keys(r.objects[0].vectors).length === 2 &&
+               r.objects[0].vectors.vector1 && Array.isArray(r.objects[0].vectors.vector1) &&
+               r.objects[0].vectors.vector1.length === 3 &&
+               r.objects[0].vectors.vector2 && Array.isArray(r.objects[0].vectors.vector2) &&
+               r.objects[0].vectors.vector2.length === 128;
       }
     });
 

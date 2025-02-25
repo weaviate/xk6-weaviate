@@ -109,9 +109,39 @@ func (*Weaviate) NewClient(cfg map[string]interface{}) (*Client, error) {
 		return nil, fmt.Errorf("host is required in config")
 	}
 
+	// Extract scheme from host if it includes http:// or https://
+	if strings.HasPrefix(strings.ToLower(host), "http://") {
+		scheme = "http"
+		host = strings.TrimPrefix(host, "http://")
+	} else if strings.HasPrefix(strings.ToLower(host), "https://") {
+		scheme = "https"
+		host = strings.TrimPrefix(host, "https://")
+	}
+
+	// Get grpcHost from config
 	grpcHost, ok := cfg["grpcHost"].(string)
 	if !ok {
-		return nil, fmt.Errorf("grpcHost is required in config")
+		// If not provided, check if it's a Weaviate Cloud instance
+		if strings.Contains(host, "weaviate.cloud") {
+			// For Weaviate Cloud, prepend "grpc-" to the host
+			grpcHost = "grpc-" + host
+			// Ensure scheme is https for Weaviate Cloud
+			scheme = "https"
+		} else {
+			return nil, fmt.Errorf("grpcHost is required in config")
+		}
+	}
+
+	// Handle Weaviate Cloud instances
+	if strings.Contains(host, "weaviate.cloud") && !strings.Contains(host, ":") {
+		// Append port 443 if not specified for Weaviate Cloud
+		host = host + ":443"
+		// If grpcHost doesn't have a port, add it
+		if !strings.Contains(grpcHost, ":") {
+			grpcHost = grpcHost + ":443"
+		}
+		// Ensure scheme is https for Weaviate Cloud
+		scheme = "https"
 	}
 
 	config := weaviate.Config{
@@ -632,10 +662,36 @@ func (c *Client) FetchObjects(className string, options map[string]interface{}) 
 	}
 
 	// Handle additional properties
-	if additional, ok := options["additional"].([]string); ok {
-		for _, prop := range additional {
+	if additional, ok := options["additional"].([]interface{}); ok {
+		// Convert []interface{} to []string
+		additionalProps := make([]string, len(additional))
+		for i, prop := range additional {
+			if strProp, ok := prop.(string); ok {
+				additionalProps[i] = strProp
+			}
+		}
+
+		// Now process the string slice
+		for _, prop := range additionalProps {
+			// Handle special cases according to documentation
 			if prop == "vector" {
 				getter = getter.WithVector()
+			} else if prop == "id" {
+				// Skip "id" as it's returned by default and not a valid additional property
+				continue
+			} else {
+				getter = getter.WithAdditional(prop)
+			}
+		}
+	} else if additional, ok := options["additional"].([]string); ok {
+		// Handle direct []string type for compatibility
+		for _, prop := range additional {
+			// Handle special cases according to documentation
+			if prop == "vector" {
+				getter = getter.WithVector()
+			} else if prop == "id" {
+				// Skip "id" as it's returned by default and not a valid additional property
+				continue
 			} else {
 				getter = getter.WithAdditional(prop)
 			}
@@ -662,7 +718,12 @@ func (c *Client) FetchObjects(className string, options map[string]interface{}) 
 			item["vector"] = obj.Vector
 		}
 		if len(obj.Vectors) > 0 {
-			item["vectors"] = obj.Vectors
+			// Convert models.Vectors to a map that can be serialized to JSON
+			vectorsMap := make(map[string]interface{})
+			for name, vec := range obj.Vectors {
+				vectorsMap[name] = vec
+			}
+			item["vectors"] = vectorsMap
 		}
 		if obj.Additional != nil {
 			item["additional"] = obj.Additional
