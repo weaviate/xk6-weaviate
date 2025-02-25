@@ -377,12 +377,29 @@ func (c *Client) BatchCreate(objects []map[string]interface{}) ([]map[string]int
 		if vectors, ok := obj["vectors"].(map[string]interface{}); ok {
 			modelObj.Vectors = make(models.Vectors, len(vectors))
 			for name, vec := range vectors {
-				if vector, ok := vec.([]float32); ok {
+				if vecSlice, ok := vec.([]interface{}); ok {
+					float32Vec := make([]float32, len(vecSlice))
+					for i, v := range vecSlice {
+						if f, ok := v.(float64); ok {
+							float32Vec[i] = float32(f)
+						}
+					}
+					modelObj.Vectors[name] = float32Vec
+				} else if vector, ok := vec.([]float32); ok {
 					modelObj.Vectors[name] = vector
 				}
 			}
 		} else if vector, ok := obj["vector"].([]float32); ok {
 			modelObj.Vector = vector
+		} else if vecSlice, ok := obj["vector"].([]interface{}); ok {
+			// Handle JavaScript arrays which come as []interface{} in Go
+			float32Vec := make([]float32, len(vecSlice))
+			for i, v := range vecSlice {
+				if f, ok := v.(float64); ok {
+					float32Vec[i] = float32(f)
+				}
+			}
+			modelObj.Vector = float32Vec
 		}
 
 		// Handle vector weights
